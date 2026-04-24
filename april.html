@@ -388,10 +388,13 @@
 
 <script>
 (function() {
+  // ===== Cloud config =====
   const BIN_ID = "69eb7e5136566621a8e956b8";
   const API_KEY = "$2a$10$tUNdgLiw0rRW2x9Fuy0Zwu/hYHdubsPEQJhMR9RDKY77RsXAvkUL2";
   const API_BASE = "https://api.jsonbin.io/v3/b/" + BIN_ID;
+  const CACHE_KEY = "april2026_cache_v2";
 
+  // ===== Calendar config =====
   const YEAR = 2026;
   const MONTH = 3;
   const MONTH_NAME = "April";
@@ -404,12 +407,14 @@
   const isCurrentMonth = today.getFullYear() === YEAR && today.getMonth() === MONTH;
   const todayDate = isCurrentMonth ? today.getDate() : -1;
 
+  // ===== State =====
   let data = {};
   let ready = false;
+  let dirty = false;        // user made changes since last successful cloud save
   let saveTimer = null;
-  let pendingSave = false;
   let selectedDay = todayDate > 0 ? todayDate : 1;
 
+  // ===== DOM =====
   const daysGrid = document.getElementById("daysGrid");
   const panelDate = document.getElementById("panelDate");
   const panelWeekday = document.getElementById("panelWeekday");
@@ -425,41 +430,84 @@
     syncLabel.textContent = label;
   }
 
-  async function loadFromCloud() {
-    setSync("loading", "Loading");
+  function becomeReady() {
+    if (ready) return;
+    ready = true;
+    taskInput.disabled = false;
+    addBtn.disabled = false;
+  }
+
+  // ===== Cache (localStorage) =====
+  function loadCache() {
     try {
-      const res = await fetch(API_BASE + "/latest", {
-        method: "GET",
-        headers: { "X-Master-Key": API_KEY }
-      });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const json = await res.json();
-      const record = json && json.record ? json.record : {};
-      data = record.tasks && typeof record.tasks === "object" ? record.tasks : {};
-      ready = true;
-      taskInput.disabled = false;
-      addBtn.disabled = false;
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (e) { return null; }
+  }
+
+  function saveCache() {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (e) {}
+  }
+
+  // ===== Cloud =====
+  async function fetchFromCloud() {
+    const res = await fetch(API_BASE + "/latest", {
+      method: "GET",
+      headers: { "X-Master-Key": API_KEY }
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const json = await res.json();
+    const record = json && json.record ? json.record : {};
+    return record.tasks && typeof record.tasks === "object" ? record.tasks : {};
+  }
+
+  async function initialLoad() {
+    // Show cache instantly if available
+    const cached = loadCache();
+    if (cached) {
+      data = cached;
+      becomeReady();
       setSync("ok", "Synced");
       renderCalendar();
       renderPanel();
+    }
+
+    // Then fetch from cloud in the background
+    try {
+      const cloud = await fetchFromCloud();
+      // Only overwrite if the user hasn't started editing yet
+      if (!dirty) {
+        data = cloud;
+        saveCache();
+        becomeReady();
+        setSync("ok", "Synced");
+        renderCalendar();
+        renderPanel();
+      }
     } catch (e) {
-      console.error("Load failed:", e);
-      setSync("error", "Offline");
+      console.error("Cloud load failed:", e);
+      if (!ready) {
+        // No cache, no cloud — truly offline
+        setSync("error", "Offline");
+      } else {
+        setSync("error", "Offline");
+      }
     }
   }
 
   function queueSave() {
     if (!ready) return;
-    pendingSave = true;
-    setSync("syncing", "Saving");
+    dirty = true;
+    saveCache();            // instant local save
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(doSave, 700);
+    saveTimer = setTimeout(pushToCloud, 400);
   }
 
-  async function doSave() {
-    if (!pendingSave) return;
+  async function pushToCloud() {
+    setSync("syncing", "Saving");
     const snapshot = JSON.stringify({ tasks: data });
-    pendingSave = false;
     try {
       const res = await fetch(API_BASE, {
         method: "PUT",
@@ -470,13 +518,15 @@
         body: snapshot
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
-      if (!pendingSave) setSync("ok", "Saved");
+      dirty = false;
+      setSync("ok", "Saved");
     } catch (e) {
       console.error("Save failed:", e);
       setSync("error", "Save failed");
     }
   }
 
+  // ===== Data helpers =====
   function getTasks(day) { return data[day] || []; }
   function setTasks(day, tasks) {
     if (!tasks || tasks.length === 0) delete data[day];
@@ -484,6 +534,7 @@
     queueSave();
   }
 
+  // ===== Render =====
   function renderCalendar() {
     daysGrid.innerHTML = "";
     for (let i = 0; i < firstDay; i++) {
@@ -614,9 +665,29 @@
     if (e.key === "Enter") addTask();
   });
 
+  // Ensure last save is pushed when closing the tab
+  window.addEventListener("beforeunload", () => {
+    if (dirty && saveTimer) {
+      clearTimeout(saveTimer);
+      // Use keepalive to survive page unload
+      try {
+        fetch(API_BASE, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Master-Key": API_KEY
+          },
+          body: JSON.stringify({ tasks: data }),
+          keepalive: true
+        });
+      } catch (e) {}
+    }
+  });
+
+  // ===== Init =====
   renderCalendar();
   renderPanel();
-  loadFromCloud();
+  initialLoad();
 })();
 </script>
 </body>
