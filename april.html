@@ -35,7 +35,13 @@
     border: 1px solid #f0efed;
   }
 
-  .header { margin-bottom: 20px; }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    gap: 12px;
+  }
 
   .header h1 {
     font-size: 28px;
@@ -47,6 +53,33 @@
     color: #78716c;
     font-size: 13px;
     margin-top: 2px;
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .tool-btn {
+    background: #fafaf9;
+    border: 1px solid #e7e5e4;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    color: #44403c;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s;
+  }
+
+  .tool-btn:hover {
+    background: white;
+    border-color: #a8a29e;
   }
 
   .weekdays {
@@ -306,14 +339,103 @@
     background: #1c1917;
     transition: width 0.3s ease;
   }
+
+  /* Backup / Restore panel */
+  .backup-panel {
+    margin-top: 16px;
+    padding: 14px;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 12px;
+    display: none;
+  }
+
+  .backup-panel.active { display: block; }
+
+  .backup-panel.restore-mode {
+    background: #dbeafe;
+    border-color: #bfdbfe;
+  }
+
+  .backup-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1c1917;
+    margin-bottom: 8px;
+  }
+
+  .backup-hint {
+    font-size: 12px;
+    color: #78716c;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  .backup-text {
+    width: 100%;
+    min-height: 70px;
+    padding: 10px;
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 11px;
+    border: 1px solid #e7e5e4;
+    border-radius: 8px;
+    resize: vertical;
+    background: white;
+    color: #1c1917;
+    outline: none;
+    word-break: break-all;
+  }
+
+  .backup-text:focus { border-color: #1c1917; }
+
+  .backup-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .backup-actions button {
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid #e7e5e4;
+    background: white;
+    color: #44403c;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .backup-actions button:hover { border-color: #a8a29e; }
+
+  .backup-actions button.primary {
+    background: #1c1917;
+    color: white;
+    border-color: #1c1917;
+  }
+
+  .backup-actions button.primary:hover { background: #44403c; }
+
+  .feedback {
+    font-size: 12px;
+    color: #16a34a;
+    margin-top: 8px;
+    font-weight: 500;
+    min-height: 16px;
+  }
+
+  .feedback.error { color: #dc2626; }
 </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
       <div class="header">
-        <h1>April 2026</h1>
-        <div class="subtitle">Click any day to plan your tasks</div>
+        <div>
+          <h1>April 2026</h1>
+          <div class="subtitle">Click any day to plan your tasks</div>
+        </div>
       </div>
       <div class="weekdays">
         <div class="weekday">Sun</div>
@@ -328,16 +450,47 @@
     </div>
 
     <div class="card">
-      <div class="panel-header">
-        <div class="date" id="panelDate">Select a day</div>
-        <div class="weekday-name" id="panelWeekday"></div>
+      <div class="header">
+        <div>
+          <div class="panel-header">
+            <div class="date" id="panelDate">Select a day</div>
+            <div class="weekday-name" id="panelWeekday"></div>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button class="tool-btn" id="backupBtn" title="Backup tasks">💾 Backup</button>
+          <button class="tool-btn" id="restoreBtn" title="Restore tasks">📋 Restore</button>
+        </div>
       </div>
+
       <div class="task-input-wrapper">
         <input type="text" class="task-input" id="taskInput" placeholder="Add a task..." maxlength="200"/>
         <button class="add-btn" id="addBtn">Add</button>
       </div>
       <ul class="task-list" id="taskList"></ul>
       <div id="statsWrap"></div>
+
+      <div class="backup-panel" id="backupPanel">
+        <div class="backup-label">💾 Your backup code</div>
+        <div class="backup-hint">Press Ctrl+C (or Cmd+C) to copy, then paste into an Affine text block to save.</div>
+        <textarea class="backup-text" id="backupText" readonly></textarea>
+        <div class="feedback" id="backupFeedback"></div>
+        <div class="backup-actions">
+          <button class="primary" id="copyBackupBtn">Copy</button>
+          <button id="closeBackupBtn">Close</button>
+        </div>
+      </div>
+
+      <div class="backup-panel restore-mode" id="restorePanel">
+        <div class="backup-label">📋 Restore tasks</div>
+        <div class="backup-hint">Paste your backup code below, then press Restore.</div>
+        <textarea class="backup-text" id="restoreText" placeholder="Paste backup code here..."></textarea>
+        <div class="feedback" id="restoreFeedback"></div>
+        <div class="backup-actions">
+          <button class="primary" id="applyRestoreBtn">Restore</button>
+          <button id="closeRestoreBtn">Cancel</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -348,6 +501,7 @@
   const MONTH_NAME = "April";
   const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   const STORAGE_KEY = "affine_april2026_tasks_v1";
+  const BACKUP_VERSION = 1;
 
   const firstDay = new Date(YEAR, MONTH, 1).getDay();
   const daysInMonth = new Date(YEAR, MONTH + 1, 0).getDate();
@@ -375,6 +529,19 @@
   const addBtn = document.getElementById("addBtn");
   const taskList = document.getElementById("taskList");
   const statsWrap = document.getElementById("statsWrap");
+
+  const backupBtn = document.getElementById("backupBtn");
+  const restoreBtn = document.getElementById("restoreBtn");
+  const backupPanel = document.getElementById("backupPanel");
+  const restorePanel = document.getElementById("restorePanel");
+  const backupText = document.getElementById("backupText");
+  const restoreText = document.getElementById("restoreText");
+  const copyBackupBtn = document.getElementById("copyBackupBtn");
+  const closeBackupBtn = document.getElementById("closeBackupBtn");
+  const applyRestoreBtn = document.getElementById("applyRestoreBtn");
+  const closeRestoreBtn = document.getElementById("closeRestoreBtn");
+  const backupFeedback = document.getElementById("backupFeedback");
+  const restoreFeedback = document.getElementById("restoreFeedback");
 
   function getTasks(day) { return data[day] || []; }
   function setTasks(day, tasks) {
@@ -511,6 +678,100 @@
   taskInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") addTask();
   });
+
+  // ========== Backup / Restore ==========
+
+  function encodeBackup(obj) {
+    const json = JSON.stringify({ v: BACKUP_VERSION, m: "apr2026", d: obj });
+    // UTF-8 safe base64
+    return btoa(unescape(encodeURIComponent(json)));
+  }
+
+  function decodeBackup(str) {
+    try {
+      const json = decodeURIComponent(escape(atob(str.trim())));
+      const parsed = JSON.parse(json);
+      if (!parsed || typeof parsed !== "object") return null;
+      if (parsed.v !== BACKUP_VERSION) return null;
+      if (!parsed.d || typeof parsed.d !== "object") return null;
+      return parsed.d;
+    } catch(e) { return null; }
+  }
+
+  function openBackup() {
+    restorePanel.classList.remove("active");
+    backupText.value = encodeBackup(data);
+    backupFeedback.textContent = "";
+    backupPanel.classList.add("active");
+    setTimeout(() => {
+      backupText.focus();
+      backupText.select();
+    }, 50);
+  }
+
+  function openRestore() {
+    backupPanel.classList.remove("active");
+    restoreText.value = "";
+    restoreFeedback.textContent = "";
+    restorePanel.classList.add("active");
+    setTimeout(() => restoreText.focus(), 50);
+  }
+
+  function tryCopy() {
+    backupText.focus();
+    backupText.select();
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } catch(e) {}
+    if (copied) {
+      backupFeedback.className = "feedback";
+      backupFeedback.textContent = "✓ Copied to clipboard!";
+    } else {
+      backupFeedback.className = "feedback error";
+      backupFeedback.textContent = "Auto-copy blocked. Press Ctrl+C (or Cmd+C) to copy.";
+    }
+    setTimeout(() => { backupFeedback.textContent = ""; }, 4000);
+  }
+
+  function applyRestore() {
+    const input = restoreText.value.trim();
+    if (!input) {
+      restoreFeedback.className = "feedback error";
+      restoreFeedback.textContent = "Please paste a backup code first.";
+      return;
+    }
+    const restored = decodeBackup(input);
+    if (!restored) {
+      restoreFeedback.className = "feedback error";
+      restoreFeedback.textContent = "Invalid or corrupted backup code.";
+      return;
+    }
+    // Count items restored
+    let dayCount = 0, taskCount = 0;
+    for (const k in restored) {
+      if (Array.isArray(restored[k])) {
+        dayCount++;
+        taskCount += restored[k].length;
+      }
+    }
+    data = restored;
+    save();
+    renderCalendar();
+    renderPanel();
+    restoreFeedback.className = "feedback";
+    restoreFeedback.textContent = "✓ Restored " + taskCount + " task(s) across " + dayCount + " day(s).";
+    setTimeout(() => {
+      restorePanel.classList.remove("active");
+    }, 1500);
+  }
+
+  backupBtn.addEventListener("click", openBackup);
+  restoreBtn.addEventListener("click", openRestore);
+  copyBackupBtn.addEventListener("click", tryCopy);
+  closeBackupBtn.addEventListener("click", () => backupPanel.classList.remove("active"));
+  applyRestoreBtn.addEventListener("click", applyRestore);
+  closeRestoreBtn.addEventListener("click", () => restorePanel.classList.remove("active"));
 
   renderCalendar();
   renderPanel();
